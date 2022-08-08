@@ -5,24 +5,97 @@ namespace App\Entity;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use App\Repository\PostRepository;
+use App\Controller\PostCountController;
+use App\Controller\PostPublishController;
+use ApiPlatform\Core\Annotation\ApiFilter;
+use ApiPlatform\Core\Annotation\ApiProperty;
 use ApiPlatform\Core\Annotation\ApiResource;
 use Symfony\Component\Validator\Constraints\Valid;
 use Symfony\Component\Serializer\Annotation\Groups;
 use Symfony\Component\Validator\Constraints\Length;
+use ApiPlatform\Core\Bridge\Doctrine\Orm\Filter\SearchFilter;
 
 #[ORM\Entity(repositoryClass: PostRepository::class)]
 #[ApiResource(
-    normalizationContext: ['groups' => ['read:Post:collection']],
+    normalizationContext: [
+        'groups' => ['read:Post:collection'],
+        'openapi_definition_name' => 'Collection'
+    ],
     denormalizationContext: ['groups' => ['write:Post']],
+    paginationItemsPerPage: 2,
+    paginationMaximumItemsPerPage: 2,
+    paginationClientItemsPerPage: true,
+    collectionOperations: [
+        'get',
+        'post',
+        'count' => [
+            'method' => 'GET',
+            'path' => '/posts/count',
+            'controller' => PostCountController::class,
+            'read' => false,
+            'filters' => [],
+            'pagination_enabled' => false,
+            'openapi_context' => [
+                'summary' => 'Récupère le nombre total d\'article',
+                'parameters' => [
+                    [
+                        'in' => 'query',
+                        'name' => 'online',
+                        'schema' => [
+                            'type' => 'integer',
+                            'maximum' => 1,
+                            'minimum' => 0
+                        ],
+                        'description' => 'Filtre les articles en ligne'
+                    ]
+                ],
+                'responses' => [
+                    '200' => [
+                        'description' => 'OK',
+                        'content' => [
+                            'application/json' => [
+                                'schema' => [
+                                    'type' => 'integer',
+                                    'example' => 3
+                                ]
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+    ],
     itemOperations: [
         'put' => [
             'denormalization_context' => ['groups' => ['write:Post']]
         ],
         'delete',
         'get' => [
-            'normalization_context' => ['groups' => ['read:Post:collection', 'read:Post:item', 'read:Post:Category']]
-        ]]
-)]
+            'normalization_context' => [
+                'groups' => ['read:Post:collection', 'read:Post:item', 'read:Post:Category'],
+                'openapi_definition_name' => 'Details'
+            ]
+            
+        ],
+        'publish' => [
+            'method' => 'post',
+            'path' => '/posts/{id}/publish',
+            'controller' => PostPublishController::class,
+            'openapi_context' => [
+                'summary' => 'Permet de publier un article',
+                'requestBody' => [
+                    'content' => [
+                        'application/json' => [
+                            'schema' => []
+                        ]
+                    ]
+                ]
+            ]
+        ]
+    ]
+),
+ApiFilter(SearchFilter::class, properties: ['id' => 'exact', 'title' => 'partial'])
+]
 class Post
 {
     #[ORM\Id]
@@ -60,6 +133,13 @@ class Post
         Valid()
     ]
     private ?Category $category = null;
+
+    #[ORM\Column(type: Types::BOOLEAN, options: ["default: false"])]
+    #[
+        Groups(['read:Post:collection']),
+        ApiProperty(openapiContext: ['type' => 'boolean', 'descriptions' => 'en ligne ou pas ?'])
+    ]
+    private ?bool $online = false;
 
     public function __construct()
     {
@@ -140,6 +220,18 @@ class Post
     public function setCategory(?Category $category): self
     {
         $this->category = $category;
+
+        return $this;
+    }
+
+    public function isOnline(): ?bool
+    {
+        return $this->online;
+    }
+
+    public function setOnline(bool $online): self
+    {
+        $this->online = $online;
 
         return $this;
     }
