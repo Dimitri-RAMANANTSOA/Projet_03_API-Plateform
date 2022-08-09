@@ -27,7 +27,7 @@ use ApiPlatform\Core\Bridge\Doctrine\Orm\Filter\SearchFilter;
     paginationClientItemsPerPage: true,
     collectionOperations: [
         'get',
-        'post',
+        'post' => ['security' => 'is_granted("ROLE_ADMIN")'],
         'count' => [
             'method' => 'GET',
             'path' => '/posts/count',
